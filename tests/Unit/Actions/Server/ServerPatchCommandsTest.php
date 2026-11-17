@@ -56,6 +56,47 @@ it('runs the pacman check as one sudo shell script for a non-root user', functio
         ->and(CheckUpdates::PACMAN_CHECK_COMMAND)->toContain('--dbpath');
 });
 
+it('detects the package manager from the supported OS family, including ID_LIKE derivatives', function (string $osRelease, ?string $packageManager) {
+    expect(CheckUpdates::packageManagerForOsFamily(Server::supportedOsFromOsRelease($osRelease)))->toBe($packageManager);
+})->with([
+    // Arch family: the ID alone, the derivatives the old switch listed, and derivatives it missed.
+    'arch' => ['ID=arch', 'pacman'],
+    'manjaro by ID_LIKE' => ["ID=manjaro\nID_LIKE=arch", 'pacman'],
+    'manjaro arm by ID_LIKE' => ["ID=manjaro-arm\nID_LIKE=\"manjaro arch\"", 'pacman'],
+    'endeavouros by ID_LIKE' => ["ID=endeavouros\nID_LIKE=arch", 'pacman'],
+    'omarchy by ID_LIKE' => ["NAME=\"Omarchy\"\nID=omarchy\nID_LIKE=arch", 'pacman'],
+    'cachyos by ID_LIKE' => ["ID=cachyos\nID_LIKE=arch", 'pacman'],
+    'garuda by ID_LIKE' => ["ID=garuda\nID_LIKE=arch", 'pacman'],
+    // Debian family.
+    'ubuntu' => ["ID=ubuntu\nID_LIKE=debian", 'apt'],
+    'debian' => ['ID=debian', 'apt'],
+    'raspbian' => ["ID=raspbian\nID_LIKE=debian", 'apt'],
+    'pop os by ID_LIKE' => ["ID=pop\nID_LIKE=\"ubuntu debian\"", 'apt'],
+    'linux mint by ID_LIKE' => ["ID=linuxmint\nID_LIKE=\"ubuntu debian\"", 'apt'],
+    'zorin by ID_LIKE' => ["ID=zorin\nID_LIKE='ubuntu debian'", 'apt'],
+    // RHEL family.
+    'centos' => ["ID=centos\nID_LIKE=\"rhel fedora\"", 'dnf'],
+    'fedora' => ['ID=fedora', 'dnf'],
+    'rhel' => ["ID=rhel\nID_LIKE=fedora", 'dnf'],
+    'oracle linux' => ["ID=ol\nID_LIKE=fedora", 'dnf'],
+    'rocky' => ["ID=\"rocky\"\nID_LIKE=\"rhel centos fedora\"", 'dnf'],
+    'almalinux' => ["ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"", 'dnf'],
+    'amazon linux' => ["ID=\"amzn\"\nID_LIKE=fedora", 'dnf'],
+    'fedora asahi remix by ID_LIKE' => ["ID=fedora-asahi-remix\nID_LIKE=fedora", 'dnf'],
+    // SUSE family.
+    'sles' => ["ID=sles\nID_LIKE=suse", 'zypper'],
+    'opensuse leap' => ["ID=\"opensuse-leap\"\nID_LIKE=suse", 'zypper'],
+    'opensuse tumbleweed' => ["ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"", 'zypper'],
+    // Alpine, and the OSes the patch check must keep rejecting.
+    'alpine' => ['ID=alpine', 'apk'],
+    'gentoo without a supported ID_LIKE' => ['ID=gentoo', null],
+    'unsupported ID_LIKE' => ["ID=foo\nID_LIKE=bar", null],
+]);
+
+it('maps every supported OS family to a package manager', function (string $family) {
+    expect(CheckUpdates::packageManagerForOsFamily(str($family)))->not->toBeNull();
+})->with(array_map(fn (string $family) => [$family], SUPPORTED_OS));
+
 it('parses checkupdates output', function () {
     $output = <<<'OUTPUT'
 libarchive 3.8.9-1 -> 3.8.10-1

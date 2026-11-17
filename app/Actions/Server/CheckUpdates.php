@@ -4,6 +4,7 @@ namespace App\Actions\Server;
 
 use App\Models\Server;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Stringable;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 class CheckUpdates
@@ -173,37 +174,10 @@ SH;
 
             // Get the main OS identifier
             $osId = $osInfo['ID'] ?? '';
-            // $osIdLike = $osInfo['ID_LIKE'] ?? '';
-            // $versionId = $osInfo['VERSION_ID'] ?? '';
 
-            // Normalize OS types based on install.sh logic
-            switch ($osId) {
-                case 'manjaro':
-                case 'manjaro-arm':
-                case 'endeavouros':
-                    $osType = 'arch';
-                    break;
-                case 'pop':
-                case 'linuxmint':
-                case 'zorin':
-                    $osType = 'ubuntu';
-                    break;
-                case 'fedora-asahi-remix':
-                    $osType = 'fedora';
-                    break;
-                default:
-                    $osType = $osId;
-            }
-
-            // Determine package manager based on OS type
-            $packageManager = match ($osType) {
-                'arch' => 'pacman',
-                'alpine' => 'apk',
-                'ubuntu', 'debian', 'raspbian' => 'apt',
-                'centos', 'fedora', 'rhel', 'ol', 'rocky', 'almalinux', 'amzn' => 'dnf',
-                'sles', 'opensuse-leap', 'opensuse-tumbleweed' => 'zypper',
-                default => null
-            };
+            // Same matcher as validateOS(): the ID first, then each ID_LIKE token, so derivatives such as
+            // Omarchy (ID=omarchy, ID_LIKE=arch) resolve to their base distribution and its package manager.
+            $packageManager = self::packageManagerForOsFamily(Server::supportedOsFromOsRelease($output));
 
             $securityPackages = null;
             switch ($packageManager) {
@@ -260,6 +234,26 @@ SH;
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * The package manager of the family that Server::supportedOsFromOsRelease() matched. Every SUPPORTED_OS
+     * entry belongs to exactly one family, so the branches cannot overlap.
+     */
+    public static function packageManagerForOsFamily(bool|Stringable $osFamily): ?string
+    {
+        if ($osFamily === false) {
+            return null;
+        }
+
+        return match (true) {
+            $osFamily->contains('arch') => 'pacman',
+            $osFamily->contains('debian') => 'apt',
+            $osFamily->contains('rhel') => 'dnf',
+            $osFamily->contains('sles') => 'zypper',
+            $osFamily->contains('alpine') => 'apk',
+            default => null,
+        };
     }
 
     /**
